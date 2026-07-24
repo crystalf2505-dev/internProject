@@ -1,11 +1,476 @@
-<html>
-
+<!DOCTYPE html>
+<html lang="en">
 <head>
-    <title>My Website</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PeriphTrack — Peripheral Inventory Tracker</title>
+
+<!-- Bootstrap 5 -->
+<link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/css/bootstrap.min.css" rel="stylesheet">
+<!-- Bootstrap Icons -->
+<link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+<!-- Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<!-- Chart.js -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+
+<style>
+  :root{
+    --bg:#0F1319;
+    --surface:#171D26;
+    --surface-2:#1E2631;
+    --border:#2A323D;
+    --text:#E8ECF1;
+    --text-muted:#8B96A5;
+    --accent:#3FB8AF;      /* teal - scan line */
+    --accent-soft:rgba(63,184,175,.14);
+    --amber:#F2A93B;
+    --amber-soft:rgba(242,169,59,.14);
+    --red:#E2574C;
+    --red-soft:rgba(226,87,76,.14);
+    --green:#49B47D;
+    --green-soft:rgba(73,180,125,.14);
+    --radius:10px;
+    --font-display:'Space Grotesk', sans-serif;
+    --font-body:'Inter', sans-serif;
+    --font-mono:'JetBrains Mono', monospace;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    background:
+      radial-gradient(1200px 500px at 10% -10%, rgba(63,184,175,.08), transparent 60%),
+      radial-gradient(900px 400px at 100% 0%, rgba(242,169,59,.06), transparent 55%),
+      var(--bg);
+    color:var(--text);
+    font-family:var(--font-body);
+    min-height:100%;
+  }
+  h1,h2,h3,h4,h5,.brand,.stat-value,.section-title{font-family:var(--font-display);}
+  .mono{font-family:var(--font-mono);}
+
+  /* ---------- Top bar ---------- */
+  .topbar{
+    background:rgba(23,29,38,.85);
+    backdrop-filter:blur(10px);
+    border-bottom:1px solid var(--border);
+    position:sticky; top:0; z-index:50;
+  }
+  .brand{font-weight:700; font-size:1.25rem; letter-spacing:.2px; color:var(--text); display:flex; align-items:center; gap:.6rem;}
+  .brand .scanmark{
+    width:26px; height:26px; border-radius:6px;
+    background:linear-gradient(135deg, var(--accent), #2a8b84);
+    display:flex; align-items:center; justify-content:center;
+    box-shadow:0 0 0 1px rgba(63,184,175,.35), 0 6px 16px rgba(63,184,175,.25);
+  }
+  .brand .scanmark i{color:#0F1319; font-size:.85rem;}
+  .brand small{display:block; font-family:var(--font-body); font-weight:400; font-size:.68rem; color:var(--text-muted); letter-spacing:.4px; text-transform:uppercase;}
+
+  .scanline-wrap{position:relative; overflow:hidden; height:2px; background:var(--border);}
+  .scanline{
+    position:absolute; top:0; left:-30%; width:30%; height:100%;
+    background:linear-gradient(90deg, transparent, var(--accent), transparent);
+    animation:scan 3.2s linear infinite;
+  }
+  @keyframes scan{ to{ left:110%; } }
+
+  /* ---------- Cards ---------- */
+  .panel{
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+  }
+  .stat-card{
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    padding:1.1rem 1.25rem;
+    position:relative;
+    overflow:hidden;
+  }
+  .stat-card::before{
+    content:""; position:absolute; inset:0 auto 0 0; width:3px;
+    background:var(--accent);
+  }
+  .stat-card.warn::before{background:var(--amber);}
+  .stat-card.danger::before{background:var(--red);}
+  .stat-label{font-size:.72rem; text-transform:uppercase; letter-spacing:.08em; color:var(--text-muted); margin-bottom:.35rem;}
+  .stat-value{font-size:1.9rem; font-weight:700; line-height:1;}
+  .stat-sub{font-size:.76rem; color:var(--text-muted); margin-top:.35rem;}
+
+  .section-title{font-weight:600; font-size:1rem; letter-spacing:.02em; margin-bottom:0;}
+  .eyebrow{font-size:.68rem; text-transform:uppercase; letter-spacing:.12em; color:var(--accent); font-weight:600;}
+
+  /* ---------- Barcode ID badge (signature element) ---------- */
+  .barcode-id{display:flex; align-items:center; gap:.5rem;}
+  .barcode-bars{
+    display:flex; align-items:stretch; gap:1px; height:18px; opacity:.85;
+  }
+  .barcode-bars span{width:2px; background:var(--text-muted);}
+  .barcode-bars span:nth-child(3n){width:1px;}
+  .barcode-bars span:nth-child(5n){background:var(--accent);}
+  .id-text{font-family:var(--font-mono); font-size:.78rem; color:var(--text-muted);}
+
+  /* ---------- Table ---------- */
+  .table{
+    --bs-table-bg:transparent;
+    --bs-table-color:var(--text);
+    margin-bottom:0;
+  }
+  .table thead th{
+    font-size:.7rem; text-transform:uppercase; letter-spacing:.07em;
+    color:var(--text-muted); border-bottom:1px solid var(--border);
+    font-weight:600; padding:.85rem 1rem; user-select:none; cursor:pointer;
+    white-space:nowrap;
+  }
+  .table thead th:hover{color:var(--text);}
+  .table thead th.no-sort{cursor:default;}
+  .table tbody td{padding:.85rem 1rem; border-bottom:1px solid var(--border); vertical-align:middle;}
+  .table tbody tr:last-child td{border-bottom:none;}
+  .table tbody tr{transition:background .12s ease;}
+  .table tbody tr:hover{background:var(--surface-2);}
+  .item-name{font-weight:600;}
+  .item-cat{font-size:.76rem; color:var(--text-muted);}
+
+  .qty-num{font-family:var(--font-mono); font-weight:700; font-size:.95rem;}
+
+  .badge-status{
+    font-family:var(--font-body); font-weight:600; font-size:.72rem;
+    padding:.3rem .6rem; border-radius:20px; letter-spacing:.02em;
+    display:inline-flex; align-items:center; gap:.35rem;
+  }
+  .badge-status::before{content:""; width:6px; height:6px; border-radius:50%;}
+  .badge-instock{background:var(--green-soft); color:var(--green);}
+  .badge-instock::before{background:var(--green);}
+  .badge-low{background:var(--amber-soft); color:var(--amber);}
+  .badge-low::before{background:var(--amber);}
+  .badge-out{background:var(--red-soft); color:var(--red);}
+  .badge-out::before{background:var(--red);}
+
+  .row-actions .btn{
+    --bs-btn-padding-y:.28rem; --bs-btn-padding-x:.5rem; --bs-btn-font-size:.85rem;
+  }
+
+  /* ---------- Buttons / Inputs ---------- */
+  .btn-accent{
+    background:var(--accent); border-color:var(--accent); color:#08171a; font-weight:600;
+  }
+  .btn-accent:hover{background:#37a49c; border-color:#37a49c; color:#08171a;}
+  .btn-outline-soft{border-color:var(--border); color:var(--text);}
+  .btn-outline-soft:hover{background:var(--surface-2); color:var(--text); border-color:var(--border);}
+
+  .form-control, .form-select{
+    background:var(--surface-2); border:1px solid var(--border); color:var(--text);
+  }
+  .form-control:focus, .form-select:focus{
+    background:var(--surface-2); color:var(--text); border-color:var(--accent);
+    box-shadow:0 0 0 .2rem var(--accent-soft);
+  }
+  .form-control::placeholder{color:var(--text-muted);}
+  .form-label{font-size:.78rem; color:var(--text-muted); font-weight:500; margin-bottom:.35rem;}
+
+  ::selection{background:var(--accent-soft); color:var(--text);}
+
+  /* ---------- Modal ---------- */
+  .modal-content{background:var(--surface); border:1px solid var(--border); color:var(--text); border-radius:var(--radius);}
+  .modal-header{border-bottom:1px solid var(--border);}
+  .modal-footer{border-top:1px solid var(--border);}
+  .btn-close{filter:invert(1) grayscale(1);}
+
+  /* ---------- Nav pills ---------- */
+  .nav-pills .nav-link{color:var(--text-muted); font-weight:500; font-size:.88rem; border-radius:8px;}
+  .nav-pills .nav-link.active{background:var(--accent-soft); color:var(--accent);}
+
+  /* ---------- Toast ---------- */
+  .toast{background:var(--surface); border:1px solid var(--border); color:var(--text);}
+
+  /* ---------- Empty state ---------- */
+  .empty-state{padding:3rem 1rem; text-align:center; color:var(--text-muted);}
+  .empty-state i{font-size:2rem; color:var(--border); margin-bottom:.6rem; display:block;}
+
+  /* ---------- Log ---------- */
+  .log-item{border-left:2px solid var(--border); padding:.15rem 0 .9rem 1rem; position:relative;}
+  .log-item::before{content:""; position:absolute; left:-5px; top:.35rem; width:8px; height:8px; border-radius:50%; background:var(--accent);}
+  .log-item.action-removed::before{background:var(--red);}
+  .log-date{font-size:.7rem; color:var(--text-muted); font-family:var(--font-mono);}
+
+  footer{color:var(--text-muted); font-size:.78rem;}
+
+  @media (max-width:767px){
+    .stat-value{font-size:1.5rem;}
+  }
+</style>
 </head>
-
 <body>
-    <p>Welcome to my website!</p>
-</body>
 
+<!-- ================= TOP BAR ================= -->
+<div class="topbar">
+  <div class="container-fluid px-3 px-md-4 py-2 d-flex align-items-center justify-content-between flex-wrap gap-2">
+    <div class="brand">
+      <span class="scanmark"><i class="bi bi-upc-scan"></i></span>
+      <span>
+        PeriphTrack
+        <small>IT Peripheral Inventory</small>
+      </span>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+      <button class="btn btn-outline-soft btn-sm" id="exportCsvBtn"><i class="bi bi-download me-1"></i>Export CSV</button>
+      <button class="btn btn-accent btn-sm" data-bs-toggle="modal" data-bs-target="#itemModal" id="openAddBtn">
+        <i class="bi bi-plus-lg me-1"></i>Add Item
+      </button>
+    </div>
+  </div>
+  <div class="scanline-wrap"><div class="scanline"></div></div>
+</div>
+
+<div class="container-fluid px-3 px-md-4 py-4">
+
+  <!-- ================= STAT CARDS ================= -->
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-lg-3">
+      <div class="stat-card">
+        <div class="stat-label">Total Items</div>
+        <div class="stat-value" id="statTotalItems">0</div>
+        <div class="stat-sub">tracked SKUs</div>
+      </div>
+    </div>
+    <div class="col-6 col-lg-3">
+      <div class="stat-card">
+        <div class="stat-label">Units On Hand</div>
+        <div class="stat-value" id="statTotalUnits">0</div>
+        <div class="stat-sub">across all locations</div>
+      </div>
+    </div>
+    <div class="col-6 col-lg-3">
+      <div class="stat-card warn">
+        <div class="stat-label">Low Stock</div>
+        <div class="stat-value" id="statLow">0</div>
+        <div class="stat-sub">at or below minimum</div>
+      </div>
+    </div>
+    <div class="col-6 col-lg-3">
+      <div class="stat-card danger">
+        <div class="stat-label">Out of Stock</div>
+        <div class="stat-value" id="statOut">0</div>
+        <div class="stat-sub">needs reorder now</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= CHARTS ================= -->
+  <div class="row g-3 mb-4">
+    <div class="col-lg-7">
+      <div class="panel p-3 p-md-4 h-100">
+        <div class="d-flex align-items-center justify-content-between mb-3">
+          <div>
+            <div class="eyebrow">Breakdown</div>
+            <h2 class="section-title">Quantity by Category</h2>
+          </div>
+        </div>
+        <canvas id="categoryChart" height="140"></canvas>
+      </div>
+    </div>
+    <div class="col-lg-5">
+      <div class="panel p-3 p-md-4 h-100">
+        <div class="eyebrow">Health</div>
+        <h2 class="section-title mb-3">Stock Status</h2>
+        <canvas id="statusChart" height="140"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= TABS ================= -->
+  <ul class="nav nav-pills mb-3" id="viewTabs">
+    <li class="nav-item">
+      <button class="nav-link active" data-view="inventory">Inventory</button>
+    </li>
+    <li class="nav-item">
+      <button class="nav-link" data-view="log">Transaction Log</button>
+    </li>
+  </ul>
+
+  <!-- ================= INVENTORY VIEW ================= -->
+  <div id="view-inventory">
+    <div class="panel p-3 mb-3">
+      <div class="row g-2 align-items-center">
+        <div class="col-12 col-md-4">
+          <div class="input-group">
+            <span class="input-group-text" style="background:var(--surface-2);border-color:var(--border);color:var(--text-muted);"><i class="bi bi-search"></i></span>
+            <input type="text" class="form-control" id="searchInput" placeholder="Search item or ID…">
+          </div>
+        </div>
+        <div class="col-6 col-md-2">
+          <select class="form-select" id="filterCategory"><option value="">All Categories</option></select>
+        </div>
+        <div class="col-6 col-md-2">
+          <select class="form-select" id="filterLocation"><option value="">All Locations</option></select>
+        </div>
+        <div class="col-6 col-md-2">
+          <select class="form-select" id="filterStatus">
+            <option value="">All Status</option>
+            <option value="In Stock">In Stock</option>
+            <option value="Low Stock">Low Stock</option>
+            <option value="Out of Stock">Out of Stock</option>
+          </select>
+        </div>
+        <div class="col-6 col-md-2 text-md-end">
+          <span class="text-muted small" id="resultCount">0 items</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="table-responsive">
+        <table class="table align-middle mb-0">
+          <thead>
+            <tr>
+              <th data-sort="id">Item ID</th>
+              <th data-sort="name">Item</th>
+              <th data-sort="location">Location</th>
+              <th data-sort="qty" class="text-end">Qty</th>
+              <th data-sort="minStock" class="text-end">Min</th>
+              <th data-sort="status">Status</th>
+              <th class="no-sort text-end">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="inventoryBody"></tbody>
+        </table>
+      </div>
+      <div class="empty-state d-none" id="emptyState">
+        <i class="bi bi-inboxes"></i>
+        No items match your filters.
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= LOG VIEW ================= -->
+  <div id="view-log" class="d-none">
+    <div class="panel p-3 p-md-4">
+      <div class="eyebrow mb-1">History</div>
+      <h2 class="section-title mb-3">Recent Transactions</h2>
+      <div id="logList"></div>
+      <div class="empty-state d-none" id="logEmpty">
+        <i class="bi bi-clock-history"></i>
+        No transactions yet.
+      </div>
+    </div>
+  </div>
+
+  <footer class="mt-4 pt-3 border-top text-center" style="border-color:var(--border) !important;">
+    Data lives in-browser for now — wire the <code>api.*</code> functions in app.js to your Node.js + Express + MongoDB backend to persist it server-side.
+  </footer>
+</div>
+
+<!-- ================= ADD / EDIT ITEM MODAL ================= -->
+<div class="modal fade" id="itemModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form id="itemForm">
+        <div class="modal-header">
+          <h5 class="modal-title" id="itemModalTitle">Add Item</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="itemEditId">
+          <div class="mb-3">
+            <label class="form-label">Item Name</label>
+            <input type="text" class="form-control" id="itemName" required placeholder="e.g. Lenovo TB4 Dock">
+          </div>
+          <div class="row">
+            <div class="col-6 mb-3">
+              <label class="form-label">Category</label>
+              <input type="text" class="form-control" id="itemCategory" list="categoryList" required placeholder="Dock, Cable…">
+              <datalist id="categoryList"></datalist>
+            </div>
+            <div class="col-6 mb-3">
+              <label class="form-label">Location</label>
+              <input type="text" class="form-control" id="itemLocation" list="locationList" required placeholder="IT Closet…">
+              <datalist id="locationList"></datalist>
+            </div>
+          </div>
+          <div class="row">
+            <div class="col-6 mb-3">
+              <label class="form-label">Starting Qty</label>
+              <input type="number" min="0" class="form-control" id="itemQty" required value="0">
+            </div>
+            <div class="col-6 mb-3">
+              <label class="form-label">Minimum Stock</label>
+              <input type="number" min="0" class="form-control" id="itemMinStock" required value="10">
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-soft" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-accent" id="itemSubmitBtn">Add Item</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ================= STOCK MOVE MODAL ================= -->
+<div class="modal fade" id="stockModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form id="stockForm">
+        <div class="modal-header">
+          <h5 class="modal-title" id="stockModalTitle">Stock In</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="stockItemId">
+          <input type="hidden" id="stockAction">
+          <p class="mb-3">Item: <strong id="stockItemName">—</strong> · Current qty: <span class="mono" id="stockItemQty">0</span></p>
+          <div class="mb-3">
+            <label class="form-label">Quantity</label>
+            <input type="number" min="1" class="form-control" id="stockQty" required value="1">
+          </div>
+          <div class="mb-1">
+            <label class="form-label">Ticket # / Notes (optional)</label>
+            <input type="text" class="form-control" id="stockNote" placeholder="e.g. INC0012345">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-soft" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-accent" id="stockSubmitBtn">Confirm</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ================= DELETE CONFIRM MODAL ================= -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Remove Item</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        Remove <strong id="deleteItemName">this item</strong> from inventory? This can't be undone.
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-soft" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn" style="background:var(--red);color:#fff;" id="confirmDeleteBtn">Remove</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= TOAST ================= -->
+<div class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index:1080;">
+  <div id="appToast" class="toast" role="status">
+    <div class="d-flex">
+      <div class="toast-body" id="appToastBody">Saved.</div>
+      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/js/bootstrap.bundle.min.js"></script>
+<script src="app.js"></script>
+</body>
 </html>
